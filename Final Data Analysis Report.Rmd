@@ -1,0 +1,160 @@
+---
+title: "Final Project 302 Yunya Li"
+author: ""
+subtitle: ""
+output:
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+    self_contained: yes
+    theme: flatly
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    code_folding: hide
+---
+
+# Introduction
+. This study will be dedicated to analyzing the association between soccer players’ wage and value, age, league, and position on the field, among data of all active players information provided by FIFA in 2022.
+
+
+## The relation between Age and wage
+
+
+```{r age, message=F}
+# pdf_document: default
+
+library(tidyverse)
+library(patchwork)
+
+dat <- read_csv("players_22.csv")
+
+#Histogram of Player ages
+pagehist<-ggplot(data = dat, aes(age)) +
+  # step 2 add a histogram with custom breaks to match old graph
+  geom_histogram(aes(y=..density..),breaks=seq(15, 55, by=2), colour = 1, fill = "white") +
+  geom_density (lwd = 1, colour = 4,
+               fill = 4, alpha = 0.25)+
+  theme_bw()+
+  labs(
+   # title = "Histogram and Density of Player Ages",
+    x="Player Ages",
+    y=""
+  )
+
+dat = mutate(dat, age_rank = ntile(desc(dat$age),5))
+ 
+pageboxplot<-ggplot(data = dat, aes(x=as.factor(age_rank),y=wage_eur)) +
+  # step 2 add a histogram with custom breaks to match old graph
+  geom_boxplot()+
+  theme_bw()+
+  ylim(0,30000)
+
+pagehist+pageboxplot
+
+aovwageage<-aov(formula=wage_eur~as.factor(age_rank), data = dat)
+aovwageage
+```
+
+
+## The five major European football leagues 
+
+```{r fivemajor, message=F}
+
+Eurotop5<-c("Italian Serie A" ,"English Premier League" ,"French Ligue 1" ,
+           "German 1. Bundesliga" , "Spain Primera Division")   
+
+dat$Eurotop5<-ifelse(dat$league_name %in% Eurotop5,1,0)
+dat$Eurotop5<-as.factor(dat$Eurotop5)
+
+ggplot(data = dat, aes(x=wage_eur)) +
+  # step 2 add a histogram with custom breaks to match old graph
+  #geom_histogram(aes(y=..density..,fill=Eurotop5),alpha=0.25) +
+  geom_density (aes(y=..density..,fill=Eurotop5,color=Eurotop5),lwd = 1,
+                alpha = 0.25)+
+  theme_bw()+
+  labs(
+   # title = "Histogram and Density of Player Ages",
+    #x="Player Ages",
+    y=""
+  )+
+  xlim(0,50000)
+  
+staEurotop5<-t.test(x=dat$wage_eur[dat$Eurotop5=="1"], y=dat$wage_eur[dat$Eurotop5=="0"], alternative = "greater", var.equal = FALSE)
+
+staEurotop5
+#staEurotop5$statistic
+
+
+```
+
+
+```{r position, message=F}
+
+ggplot(data = dat, aes(x=club_position,y=wage_eur)) +
+  # step 2 add a histogram with custom breaks to match old graph
+  #geom_histogram(aes(y=..density..,fill=Eurotop5),alpha=0.25) +
+  geom_boxplot()+ #geom_violin ()+
+  theme_bw()+
+  labs(
+   # title = "Histogram and Density of Player Ages",
+    #x="Player Ages",
+    y=""
+  )+
+  ylim(0,20000)
+ 
+aovposition<-aov(formula=wage_eur~club_position, data = dat)
+aovposition
+
+```
+ The F test rejects the null hypothesis, and there is no difference in the income of each position
+
+## Correlation analysis
+
+```{r Correlation, message=F}
+library(GGally)
+
+ggpairs(dat[, c("wage_eur", "value_eur", "potential","overall")])
+```
+From the correlation between wage and value, potential and overall, the correlation coefficient between wage and value is 0.824, showing the strongest correlation. The correlation coefficient between wage and overall is 0.602, and the correlation is the second. The correlation coefficient between wage and potential is 0.498, which is the lowest correlation, but also a strong positive correlation.
+
+
+```{r linear model, message=F}
+#Histogram of Player ages
+library(MASS)
+b <- boxcox(lm(wage_eur ~ 1,data=dat))
+# Exact lambda
+lambda <- b$x[which.max(b$y)]
+lambda
+
+dat$boxcoxwage<-(dat$wage_eur^lambda-1)/lambda
+
+ggplot(data = dat, aes(x=boxcoxwage ) )+
+  # step 2 add a histogram with custom breaks to match old graph
+  geom_histogram(aes(y=..density..),breaks=seq(15, 55, by=2), colour = 1, fill = "white") +
+  geom_density (lwd = 1, colour = 4,
+               fill = 4, alpha = 0.25)+
+  theme_bw()+
+  labs(
+   # title = "Histogram and Density of Player Ages",
+    #x="Player Ages",
+    y=""
+  )
+
+ml1<-lm(formula = wage_eur~value_eur+potential+overall+club_position+Eurotop5+as.factor(age_rank),data=dat)
+
+ml2<-lm(formula = boxcoxwage~value_eur+potential+overall+club_position+Eurotop5+as.factor(age_rank),data=dat)
+
+#step(object=ml2,direction = "forward")
+
+plot(ml1,2)
+plot(ml2,2)
+
+summary(ml2)
+
+knitr::kable(summary(ml2)$coefficients)
+#summary(ml2)$coefficients
+
+```
+
+
